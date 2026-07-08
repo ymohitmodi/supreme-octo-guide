@@ -16,12 +16,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import gates
+from .critique import CritiqueReport
 from .experiments import ExperimentResult, run_experiment
 from .ideas import Idea, extend_idea, mine_ideas, revise_idea
 from .ingest import IngestResult, Paper, ingest_topic
 from .memory import Contribution, ResearchLedger
 from .novelty import FITNESS_BAR, NoveltyReport, assess
 from .paper import PaperArtifact, write_paper
+from .refine import refine
 from .review import ReviewReport, review
 from .topics import TOPICS, TOPICS_BY_SLUG, Topic
 
@@ -64,6 +66,10 @@ class PaperResult:
     depth: int = 0
     builds_on: list[str] = field(default_factory=list)
     capital: float = 0.0
+    critique: CritiqueReport | None = None
+    refine_rounds: int = 0
+    refine_resolved: list[str] = field(default_factory=list)
+    critique_directives: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         a = "ACCEPTED" if self.accepted else "REJECTED"
@@ -72,12 +78,18 @@ class PaperResult:
                  if self.builds_on else "")
         rev = (f"{self.review.recommendation} ({self.review.score:.2f})"
                if self.review else "n/a")
+        crit = ""
+        if self.critique:
+            resolved = f" resolved={self.refine_resolved}" if self.refine_resolved else ""
+            crit = (f"\n  internal-critic={self.critique.verdict} "
+                    f"({self.critique.overall:.2f}, {len(self.critique.major)} major) "
+                    f"refine_rounds={self.refine_rounds}{resolved}")
         return (
             f"[{a}] {self.idea.title}\n"
             f"  topic={self.topic} venue={self.idea.target_venue} cycle={self.cycle} "
             f"considered={self.considered} revisions={self.revisions}\n"
             f"  novelty={self.report.novelty:.2f} (bar {self.bar:.2f}) impact={self.idea.impact:.2f} "
-            f"fitness={self.idea.fitness:.2f} | review={rev}\n"
+            f"fitness={self.idea.fitness:.2f} | review={rev}{crit}\n"
             f"  experiment={self.experiment.headline()}{built}\n"
             f"  artifact={(self.artifact.tex_path if self.artifact else 'n/a')}{pdf}\n"
             f"  gate={'clean' if not (self.artifact and self.artifact.violations) else self.artifact.violations}"
@@ -166,18 +178,36 @@ def produce_paper(topic_slug: str, ctx=None, outdir: str = "output/papers",
     builds_on_titles = [building_on.title] if building_on else []
     depth = (building_on.depth + 1) if building_on else 0
 
-    # Deep-dive: run the real experiment and write the paper (self-citing prior work).
+    # Deep-dive: run the real experiment for this topic.
     exp = run_experiment(topic.slug, seed=seed)
+
+    # INTERNAL CRITIQUE → REVISE, before any external judge. The adversarial+
+    # constructive critic attacks the draft; each criticism becomes a revision;
+    # the paper that reaches the external judge is already the hardened version.
+    refined = refine(idea, report, exp, corpus, topic, ctx=ctx,
+                     builds_on_titles=builds_on_titles, bar=bar)
+    idea, report = refined.idea, refined.report
+    # Feed critique feedback back into memory (recurring weaknesses → doctrine).
+    if memory is not None:
+        for text, kind, tags in refined.lessons:
+            memory.remember(text, kind=kind, tags=tags, source="darkfactory.critique")
+
+    # Write the hardened paper (self-citing prior work), then external judges.
     artifact = write_paper(idea, exp, report, corpus, outdir=outdir,
                            gate_check=gates.check_research, builds_on_titles=builds_on_titles)
 
     # Thoroughness review against the world-leading-conference bar.
     rev = review(idea, exp, artifact.tex, n_citations=len(idea.nearest_prior[:6]), ctx=ctx)
 
-    # Acceptance = novelty bar (dynamic) AND integrity gate AND conference-bar review.
-    accepted = report.passes and not artifact.violations and rev.meets_bar
+    # Acceptance requires ALL judges: the internal critic must have no unresolved
+    # major weakness, AND the novelty bar (dynamic), integrity gate, and
+    # conference-bar review must pass. The internal critic gates first.
+    internal_ok = not refined.final.major
+    accepted = internal_ok and report.passes and not artifact.violations and rev.meets_bar
     if accepted:
-        reason = "cleared novelty bar, integrity gate, and conference-bar review"
+        reason = "cleared internal critic, novelty bar, integrity gate, and conference-bar review"
+    elif not internal_ok:
+        reason = f"internal critic (unresolved major): {refined.final.major[0].reviewer_says}"
     elif artifact.violations:
         reason = "integrity gate: " + "; ".join(artifact.violations)
     elif not report.passes:
@@ -201,6 +231,8 @@ def produce_paper(topic_slug: str, ctx=None, outdir: str = "output/papers",
         accepted=accepted, revisions=revisions, considered=considered, ingest=ingest,
         reason=reason, cycle=cycle, bar=bar, review=rev, depth=depth,
         builds_on=builds_on_titles, capital=ledger.research_capital(),
+        critique=refined.final, refine_rounds=refined.rounds,
+        refine_resolved=refined.resolved, critique_directives=refined.directives,
     )
 
 

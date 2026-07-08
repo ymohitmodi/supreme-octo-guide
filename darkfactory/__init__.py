@@ -14,11 +14,14 @@ __version__ = "0.1.0"
 
 from . import roles  # noqa: F401 — registers the researcher role on import
 from .capability import AISecurityResearchCapability
+from .critique import critique
 from .ideas import Idea, extend_idea, mine_ideas
+from .knowledge import sync_skills
 from .memory import Contribution, ResearchLedger
 from .models import apply_models
 from .novelty import assess
 from .pipeline import PaperResult, produce_paper, serve
+from .refine import refine
 from .review import review
 from .topics import TOPICS, seed_doctrine
 
@@ -44,6 +47,9 @@ __all__ = [
     "extend_idea",
     "assess",
     "review",
+    "critique",
+    "refine",
+    "sync_skills",
     "Idea",
     "Contribution",
     "ResearchLedger",

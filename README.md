@@ -16,10 +16,35 @@ in deterministic MOCK mode** (no API key) so the entire pipeline is reproducible
 in CI.
 
 ```
-ingest SOTA (arXiv MCP) → build on prior contributions → mine ideas
-    → bar-raise vs prior art → iterate → run real benchmark → write LaTeX/PDF
-    → integrity gate → conference-bar review → accept → record contribution
+ingest SOTA (arXiv MCP) → build on prior contributions → mine foundational ideas
+    → bar-raise vs prior art → run real benchmark → write LaTeX/PDF
+    → INTERNAL CRITIC attacks + refine loop hardens it  (before any external judge)
+    → integrity gate → conference-bar review (calibrated to real rubrics)
+    → accept → record contribution → feed weaknesses back into evolution
 ```
+
+## Internal critic before the external judge
+
+Every draft is first attacked by an **internal adversarial + constructive critic**
+— the harshest reviewer it will ever face — *before* any external judge sees it.
+The critic is calibrated to the **public review dimensions and rejection archetypes
+of top venues** (IEEE S&P, USENIX, NDSS, CCS, NeurIPS/SaTML): it assumes rejection,
+names the strongest reason a committee would reject (non-adaptive evaluation, weak
+baselines, thin novelty, overclaiming, unrealistic threat model, offense without
+defense…), and turns **every criticism into a concrete remedy**. A feedback-driven
+**refine loop** then applies those remedies and re-critiques until no major weakness
+stands — so negative feedback becomes compounding revisions, not a verdict. Only the
+hardened paper reaches the external novelty bar-raiser and conference reviewer, and a
+paper is accepted only if it clears the internal critic **and** all external judges.
+Recurring weaknesses become **evolution directives**, so the researcher's doctrine
+learns to avoid them across cycles.
+
+The critic, judge, and researcher are equipped with **in-depth SOTA skill packs**
+(`darkfactory/skills/`) — AI-security state of the art, the frontier-model lifecycle
+(Constitutional-AI critique-and-revise, RLVR's verify-or-collapse flywheel,
+LLM-as-judge, contamination/Goodhart), the adversarial-critique playbook, the
+conference reviewer rubric, and foundational-research heuristics — synced into NYX
+long-term memory and recalled while they work.
 
 ## Compounding: quality rises every cycle
 
@@ -60,6 +85,12 @@ head-to-head comparison — one concrete step further, every cycle.
 - **Reviews for thoroughness** — a conference-bar reviewer checks each manuscript
   for a precise threat model, baseline comparison, ablation/trade-off,
   reproducibility, grounded related work, limitations, and ethics before accepting.
+- **Self-critiques adversarially, then improves** — an internal critic calibrated to
+  real venue rubrics attacks each draft and a refine loop applies the fixes before
+  external judgment; recurring weaknesses feed back into evolution.
+- **Is equipped with SOTA skills** — five in-depth skill packs (AI-security SOTA,
+  frontier-model lifecycle, critique playbook, reviewer rubric, foundational
+  heuristics) synced into memory so live agents reason from the state of the art.
 - **Mines** structured research ideas (LLM-driven when live; deterministic
   recombination of threat×method×asset primitives offline).
 - **Bar-raises novelty** against the prior art (TF-IDF cosine offline; an LLM
@@ -99,6 +130,9 @@ python -m darkfactory experiment adversarial-examples   # run a real benchmark
 python -m darkfactory paper prompt-injection     # produce ONE full paper
 python -m darkfactory serve --max 10             # the 24/7 loop: 10 compounding papers
 python -m darkfactory ledger --lineage prompt-injection   # the compounding lineage
+python -m darkfactory critique prompt-injection  # internal adversarial+constructive critique
+python -m darkfactory rubric                     # the reviewer rubric + rejection archetypes
+python -m darkfactory skills-sync                # load SOTA skill packs into memory
 python -m darkfactory evolve -g 8                # evolve the researcher doctrine
 python -m darkfactory mcp-init                   # register the arXiv MCP server
 ```
@@ -133,6 +167,10 @@ running it 24/7 and going live.
 | `arxiv_mcp.py` | arXiv MCP server integration (search + citation graph) |
 | `ideas.py` | Idea model + mining + revision + **build-on extension** |
 | `novelty.py` | The bar-raiser: novelty/impact/feasibility/rigor scoring |
+| `reviewer_corpus.py` | Real-venue review dimensions + rejection archetypes (judge/critic calibration) |
+| `critique.py` | **Internal adversarial+constructive critic** |
+| `refine.py` | **Feedback-driven critique→revise loop** (before external judge) |
+| `skills/` + `knowledge.py` | SOTA skill packs synced into NYX memory |
 | `memory.py` | **Compounding ledger**: contributions, lineage, ratcheting bar |
 | `review.py` | Conference-bar thoroughness reviewer |
 | `experiments.py` | Self-contained real benchmarks (3 families, pure Python) |

@@ -66,6 +66,23 @@ python -m darkfactory mcp-init            # writes it into NYX's MCP manifest
 NYX launches it via `uvx`/stdio and exposes it as `mcp.arxiv-mcp-server`. Without
 it, ingestion falls back to the direct arXiv API and the curated corpus.
 
+### Internal critic, rubric, and SOTA skills
+
+The factory hardens every paper internally before external judgment:
+
+```bash
+python -m darkfactory critique prompt-injection   # adversarial+constructive critique + refine
+python -m darkfactory rubric                       # the review dimensions + rejection archetypes
+python -m darkfactory skills-sync                  # load the SOTA skill packs into NYX memory
+```
+
+The critic and judge are calibrated to the **public** review rubrics and recurring
+reviewer critique patterns of top venues (from their published reviewer guidelines
+and public OpenReview discussions) — not private review text, which is not
+redistributable. Live (`OLLAMA_API_KEY` set), the critic and judge additionally
+recall the skill packs and reason with the frontier model for sharper, venue-matched
+feedback. `skills-sync` runs automatically when the NYX capability seeds memory.
+
 ### Compounding across cycles
 
 Quality compounds through the offline research ledger. Inspect it any time:

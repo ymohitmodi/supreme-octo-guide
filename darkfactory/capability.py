@@ -40,6 +40,9 @@ class AISecurityResearchCapability(Capability):
         self.outdir = outdir
         # One persistent ledger for the whole run so quality compounds across cycles.
         self.ledger = ResearchLedger(ledger_path or DEFAULT_LEDGER)
+        # Directives the internal critic surfaced from recurring weaknesses; folded
+        # into the evolution pool so the researcher's doctrine learns to avoid them.
+        self._critique_directives: set[str] = set()
 
     # --- routing ---
     def matches(self, objective: str) -> bool:
@@ -54,7 +57,9 @@ class AISecurityResearchCapability(Capability):
         return "researcher"
 
     def directives(self):
-        return RESEARCH_DIRECTIVES
+        # Base research methodology + whatever the internal critic taught us this
+        # run (feedback-driven evolution): recurring weaknesses become doctrine.
+        return list(RESEARCH_DIRECTIVES) + sorted(self._critique_directives)
 
     def benchmark(self, ctx: CycleContext) -> ResearchBenchmark:
         return ResearchBenchmark()
@@ -74,7 +79,16 @@ class AISecurityResearchCapability(Capability):
         return gates.add_research_forbidden(base)
 
     def seed_memory(self, memory) -> int:
-        return seed_doctrine(memory)
+        # Seed research doctrine AND the in-depth SOTA skill packs (AI-security
+        # SOTA, frontier-model lifecycle, critique playbook, reviewer rubric,
+        # foundational heuristics) so the live critic/judge/researcher recall them.
+        from .knowledge import sync_skills
+        n = seed_doctrine(memory)
+        try:
+            n += sync_skills(memory)
+        except Exception:  # noqa: BLE001 — skills are best-effort
+            pass
+        return n
 
     def refresh_knowledge(self, ctx: CycleContext) -> dict:
         """Keep reading the AI-security literature into memory (best-effort)."""
@@ -100,6 +114,9 @@ class AISecurityResearchCapability(Capability):
             (topic_for(task) or TOPICS[0]).slug)
         result = produce_paper(topic_slug, ctx=ctx, outdir=self.outdir,
                                seed=1337 + ctx.cycle_index, ledger=self.ledger)
+        # Feedback-driven evolution: absorb the critic's directives into the pool
+        # the EvolutionEngine will mutate the researcher genome with next round.
+        self._critique_directives.update(result.critique_directives)
         idea, rep, art = result.idea, result.report, result.artifact
         blocked = None if result.accepted else (
             "G_RESEARCH" if (art and art.violations) else "G_NOVELTY_BAR")

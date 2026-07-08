@@ -141,6 +141,63 @@ def cmd_evolve(args) -> int:
     return 0
 
 
+def cmd_critique(args) -> int:
+    """Show the internal adversarial + constructive critique for a topic's paper."""
+    from .critique import critique
+    from .experiments import run_experiment
+    from .ideas import mine_ideas
+    from .ingest import corpus_for
+    from .novelty import assess
+    from .paper import build_latex
+    from .refine import refine
+    topic = _resolve_topic(args.topic)
+    ctx = _live_ctx()
+    corpus = corpus_for(topic.slug)
+    idea = mine_ideas(topic, n=6, ctx=ctx, prior_titles=[p.title for p in corpus])[0]
+    report = assess(idea, corpus, ctx)
+    exp = run_experiment(topic.slug, seed=args.seed)
+    tex = build_latex(idea, exp, report, corpus)
+    print(f"Draft: {idea.title}\n")
+    print(critique(idea, exp, tex, ctx).summary())
+    print("\n--- internal refine loop ---")
+    r = refine(idea, report, exp, corpus, topic, ctx=ctx)
+    print(r.summary())
+    if r.directives:
+        print("evolution directives learned:", r.directives)
+    return 0
+
+
+def cmd_rubric(args) -> int:
+    """Print the conference reviewer rubric the judge/critic are calibrated to."""
+    from .reviewer_corpus import ARCHETYPES, DIMENSIONS
+    print("Review dimensions (what top venues score):\n")
+    for d in DIMENSIONS:
+        print(f"  {d.name:28s} w={d.weight:.2f}  {d.question}")
+    print("\nRejection archetypes (recurring reviewer critiques):\n")
+    for a in ARCHETYPES:
+        print(f"  [{a.severity:5s}] {a.id:24s} → {a.dimension}")
+        print(f"          says:  {a.reviewer_says}")
+        print(f"          remedy: {a.remedy}")
+    return 0
+
+
+def cmd_skills_sync(args) -> int:
+    """Sync the SOTA skill packs into NYX long-term memory."""
+    from nyx.config import load_config
+    from nyx.memory import MemoryStore
+
+    from .knowledge import sync_skills, titles
+    cfg = load_config()
+    store = MemoryStore(cfg.memory_path)
+    n = sync_skills(store)
+    print(f"Synced {n} skill sections into long-term memory from {len(titles())} packs:")
+    for t in titles():
+        print(f"  - {t}")
+    print(f"\nMemory now holds {len(store)} lessons. The live critic, judge, and "
+          "researcher recall these while they work.")
+    return 0
+
+
 def cmd_mcp_init(args) -> int:
     from nyx.config import load_config
 
@@ -201,6 +258,10 @@ def cmd_doctor(args) -> int:
     led = ResearchLedger(DEFAULT_LEDGER)
     print(f"• ledger: {len(led)} contributions, capital={led.research_capital():.2f}, "
           f"next bar={led.current_bar():.3f}")
+    from .knowledge import titles
+    from .reviewer_corpus import ARCHETYPES, DIMENSIONS
+    print(f"• skills: {len(titles())} SOTA packs (`darkfactory skills-sync` to load)")
+    print(f"• critic: {len(DIMENSIONS)} review dimensions, {len(ARCHETYPES)} rejection archetypes")
     print(f"• topics: {len(TOPICS)} on the frontier")
     print("\nDoctor:", "healthy ✓" if ok else "issues found ✗")
     return 0
@@ -244,6 +305,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("evolve", help="evolve the researcher doctrine (Darwin-Gödel)")
     sp.add_argument("-g", "--generations", type=int, default=8)
     sp.set_defaults(func=cmd_evolve)
+
+    sp = sub.add_parser("critique", help="show the internal adversarial+constructive critique")
+    sp.add_argument("topic")
+    sp.add_argument("--seed", type=int, default=1337)
+    sp.set_defaults(func=cmd_critique)
+
+    sp = sub.add_parser("rubric", help="print the conference reviewer rubric + rejection archetypes")
+    sp.set_defaults(func=cmd_rubric)
+
+    sp = sub.add_parser("skills-sync", help="sync the SOTA skill packs into NYX memory")
+    sp.set_defaults(func=cmd_skills_sync)
 
     sp = sub.add_parser("mcp-init", help="register the arxiv-mcp-server in NYX's MCP manifest")
     sp.add_argument("--storage", default=".darkfactory/arxiv", help="local paper storage path")

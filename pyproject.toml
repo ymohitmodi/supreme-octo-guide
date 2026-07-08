@@ -33,6 +33,10 @@ darkfactory = "darkfactory.__main__:main"
 [tool.setuptools.packages.find]
 include = ["darkfactory*"]
 
+[tool.setuptools.package-data]
+# Ship the SOTA skill packs inside the wheel so installs have the knowledge base.
+darkfactory = ["skills/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

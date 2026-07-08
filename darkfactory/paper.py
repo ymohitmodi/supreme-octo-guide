@@ -208,6 +208,9 @@ We evaluate on the following benchmark, released with a fixed seed
 (\\texttt{{seed={exp.seed}}}) for exact reproducibility.
 \\emph{{Dataset:}} {_tex_escape(exp.dataset)}.
 \\emph{{Method:}} {_tex_escape(exp.method)}.
+The evaluation set is held out and disjoint from any training data by construction
+(freshly sampled), controlling for benchmark contamination; all code and the exact
+benchmark specification are released.
 
 \\section{{Results}}
 {_results_table(exp)}

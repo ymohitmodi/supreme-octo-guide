@@ -68,12 +68,46 @@ across runs, so the factory never starts cold.
    benchmark for the topic family and collect metrics.
 5. **Write** (`paper.write_paper`) — assemble LaTeX/Markdown from the idea, the
    bar-raiser's report, and the experiment; compile PDF if TeX is present.
+5b. **Internal critique → refine** (`critique.py`, `refine.py`) — BEFORE any
+   external judge, an adversarial+constructive critic attacks the draft and a
+   feedback loop applies each remedy until no major weakness stands (see below).
 6. **Gate + review** — `gates.check_research` (integrity) and `review.review`
    (conference-bar thoroughness) must both pass. Acceptance requires clearing the
-   ratcheting novelty bar **and** the integrity gate **and** the thoroughness
-   review — the "all publications must go through" bar-raiser.
-7. **Record** — an accepted paper is written to the ledger with its build-on
-   edge, so the next cycle compounds on it.
+   **internal critic** (no unresolved major) **and** the ratcheting novelty bar
+   **and** the integrity gate **and** the thoroughness review.
+7. **Record + learn** — an accepted paper is written to the ledger with its
+   build-on edge; recurring critique weaknesses become evolution directives.
+
+## The internal critic and feedback-driven refinement
+
+The critic (`critique.py`) is calibrated by `reviewer_corpus.py` — the **public**
+review dimensions (soundness 28%, novelty 20%, significance 20%, reproducibility
+14%, clarity 10%, ethics 8%) and the recurring **rejection archetypes** top venues
+apply, each with a detector and a *constructive remedy*. Offline it is a
+deterministic detector pass; live, an LLM critic equipped with the skill packs
+refines it, seeded by the deterministic weaknesses so it reasons about real flaws.
+
+`refine.py` runs the Constitutional-AI **critique → revise** loop: draft → critic →
+apply each remedy to the idea/paper → re-critique, until no major weakness remains
+or the budget is spent. This is why negative feedback is *compounding*, not a
+verdict — every criticism becomes a revision, so the paper reaching the external
+judge is already the hardened version. Recurring weaknesses are emitted as
+**evolution directives** (fed into the researcher genome's mutation pool) and
+written to memory, so the doctrine improves across cycles — feedback-driven
+evolution. Acceptance gates on the internal critic first, so the internal verdict
+predicts and precedes the external one.
+
+## SOTA skill packs (`skills/`, `knowledge.py`)
+
+Five in-depth markdown packs encode the state of the art: AI-security SOTA (threat
+surface, what's foundational, the methodological bar), the frontier-model lifecycle
+(Constitutional AI, RLVR's verify-or-collapse flywheel, LLM-as-judge,
+contamination/Goodhart, red-teaming — distilled from *The Frontier Model Field
+Manual*), the adversarial-critique playbook, the conference reviewer rubric, and
+foundational-research heuristics. `knowledge.sync_skills` ingests them via NYX's
+`sync_skills` (one long-term memory lesson per `##` section), so the live critic,
+judge, and researcher recall exactly the relevant guidance while they work. The
+capability seeds them automatically; `darkfactory skills-sync` does it manually.
 
 ## arXiv MCP + SOTA ingestion (`arxiv_mcp.py`, `ingest.py`)
 
