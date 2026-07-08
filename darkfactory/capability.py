@@ -35,8 +35,11 @@ class AISecurityResearchCapability(Capability):
                    "conference prior art, run real benchmarks, and write conference-grade "
                    "LaTeX/PDF papers.")
 
-    def __init__(self, outdir: str = "output/papers"):
+    def __init__(self, outdir: str = "output/papers", ledger_path: str | None = None):
+        from .memory import DEFAULT_LEDGER, ResearchLedger
         self.outdir = outdir
+        # One persistent ledger for the whole run so quality compounds across cycles.
+        self.ledger = ResearchLedger(ledger_path or DEFAULT_LEDGER)
 
     # --- routing ---
     def matches(self, objective: str) -> bool:
@@ -78,7 +81,7 @@ class AISecurityResearchCapability(Capability):
         from .ingest import ingest_topic
         from .pipeline import _fetcher_from_ctx
         topic = TOPICS[ctx.cycle_index % len(TOPICS)]
-        res = ingest_topic(topic, fetcher=_fetcher_from_ctx(ctx), memory=ctx.memory)
+        res = ingest_topic(topic, fetcher=_fetcher_from_ctx(ctx), memory=ctx.memory, ctx=ctx)
         return res.stats()
 
     # --- planning & acting ---
@@ -96,13 +99,15 @@ class AISecurityResearchCapability(Capability):
         topic_slug = task if task in TOPICS_BY_SLUG else (
             (topic_for(task) or TOPICS[0]).slug)
         result = produce_paper(topic_slug, ctx=ctx, outdir=self.outdir,
-                               seed=1337 + ctx.cycle_index)
+                               seed=1337 + ctx.cycle_index, ledger=self.ledger)
         idea, rep, art = result.idea, result.report, result.artifact
         blocked = None if result.accepted else (
             "G_RESEARCH" if (art and art.violations) else "G_NOVELTY_BAR")
+        built = f" builds-on-depth={result.depth}" if result.builds_on else ""
         summary = (f"{'ACCEPTED' if result.accepted else 'REJECTED'}: {idea.title} "
-                   f"→ {idea.target_venue}. novelty={rep.novelty:.2f} "
-                   f"fitness={idea.fitness:.2f}. {result.experiment.finding}")
+                   f"→ {idea.target_venue}. novelty={rep.novelty:.2f}/bar={result.bar:.2f} "
+                   f"fitness={idea.fitness:.2f}{built} capital={result.capital:.2f}. "
+                   f"{result.experiment.finding}")
         # Feed the realized outcome back as a trusted track record so the factory
         # accumulates what actually clears the bar.
         lessons = [(

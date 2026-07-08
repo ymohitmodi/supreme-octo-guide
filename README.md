@@ -10,14 +10,38 @@ research-integrity constitution.
 
 It plugs into NYX as a *capability*, so it inherits NYX's continual learning,
 Darwin-Gödel evolution, least-privilege tools, and tamper-evident audit ledger.
-It runs on a **GPU-less Windows 11 mini-PC** using **Ollama Cloud** models, and
-runs **fully offline in deterministic MOCK mode** (no API key) so the entire
-pipeline is reproducible in CI.
+It runs on a **GPU-less Windows 11 mini-PC** using the **latest Ollama Cloud**
+models (GLM-5.2, DeepSeek-V4-Pro) for highest accuracy, and runs **fully offline
+in deterministic MOCK mode** (no API key) so the entire pipeline is reproducible
+in CI.
 
 ```
-ingest SOTA → mine ideas → bar-raise vs prior art → iterate/revise → deep-dive
-            → run real benchmark → write LaTeX/PDF → integrity gate → accept/reject
+ingest SOTA (arXiv MCP) → build on prior contributions → mine ideas
+    → bar-raise vs prior art → iterate → run real benchmark → write LaTeX/PDF
+    → integrity gate → conference-bar review → accept → record contribution
 ```
+
+## Compounding: quality rises every cycle
+
+The factory keeps an **offline research ledger** (`.darkfactory/contributions.jsonl`)
+of every accepted paper and what it builds on. Each cycle stands on that
+accumulated body of work instead of starting cold, so contributions form a
+**deepening lineage** rather than a flat pile — and the **novelty bar ratchets up**
+with the factory's accumulated *research capital*, so later papers must be more
+impactful than earlier ones to be accepted. Six cycles on one topic, offline:
+
+```
+✓ Measuring the cost of indirect injection on tool-call authorization      (depth 0, bar 0.62)
+✓ Tightening the certified bound on system-prompt integrity                (depth 1, bar 0.63)
+✓ From detection to prevention of multi-agent relay                        (depth 2, bar 0.64)
+✓ Cross-threat generalization of content-provenance tags                   (depth 3, bar 0.66)
+✓ Tightening the certified bound … (indirect/retrieved)                    (depth 4, bar 0.67)
+✓ Cross-threat generalization of taint tracking                            (depth 5, bar 0.68)
+research capital 0.00 → 6.45   novelty bar 0.620 → 0.695
+```
+
+Each build-on paper **self-cites** the prior contribution it extends and reports a
+head-to-head comparison — one concrete step further, every cycle.
 
 ## What it actually does (and what it doesn't)
 
@@ -27,7 +51,15 @@ ingest SOTA → mine ideas → bar-raise vs prior art → iterate/revise → dee
   extraction, agentic security, RAG security, safety evaluation, watermarking) with
   seeded research doctrine.
 - **Ingests prior art** — a curated corpus of ~22 landmark AI-security papers,
-  augmented live from the arXiv API when online.
+  augmented live from the **[arXiv MCP server](https://github.com/blazickjp/arxiv-mcp-server)**
+  (search + `citation_graph` to find exactly what to build on) via NYX's MCP
+  support, falling back to the direct arXiv API.
+- **Compounds** — records every accepted paper in an offline ledger and builds the
+  next paper on the most impactful prior one, with a novelty bar that rises as
+  research capital accumulates.
+- **Reviews for thoroughness** — a conference-bar reviewer checks each manuscript
+  for a precise threat model, baseline comparison, ablation/trade-off,
+  reproducibility, grounded related work, limitations, and ethics before accepting.
 - **Mines** structured research ideas (LLM-driven when live; deterministic
   recombination of threat×method×asset primitives offline).
 - **Bar-raises novelty** against the prior art (TF-IDF cosine offline; an LLM
@@ -65,8 +97,10 @@ python -m darkfactory topics                     # the research frontier
 python -m darkfactory ideas prompt-injection     # mine + bar-raise ideas
 python -m darkfactory experiment adversarial-examples   # run a real benchmark
 python -m darkfactory paper prompt-injection     # produce ONE full paper
-python -m darkfactory serve --max 10             # the 24/7 loop: 10 gated papers
+python -m darkfactory serve --max 10             # the 24/7 loop: 10 compounding papers
+python -m darkfactory ledger --lineage prompt-injection   # the compounding lineage
 python -m darkfactory evolve -g 8                # evolve the researcher doctrine
+python -m darkfactory mcp-init                   # register the arXiv MCP server
 ```
 
 Everything above runs offline. To light up the brain (live idea mining + LLM
@@ -95,14 +129,18 @@ running it 24/7 and going live.
 | --- | --- |
 | `topics.py` | AI-security taxonomy + seeded research doctrine |
 | `conferences.py` | Target-venue registry (scope, cadence, what reviewers reward) |
-| `ingest.py` | Prior-art corpus (curated + live arXiv) |
-| `ideas.py` | Idea model + mining + revision |
+| `ingest.py` | Prior-art corpus (curated + arXiv MCP + arXiv API) |
+| `arxiv_mcp.py` | arXiv MCP server integration (search + citation graph) |
+| `ideas.py` | Idea model + mining + revision + **build-on extension** |
 | `novelty.py` | The bar-raiser: novelty/impact/feasibility/rigor scoring |
+| `memory.py` | **Compounding ledger**: contributions, lineage, ratcheting bar |
+| `review.py` | Conference-bar thoroughness reviewer |
 | `experiments.py` | Self-contained real benchmarks (3 families, pure Python) |
-| `paper.py` | LaTeX + PDF + Markdown generation |
+| `paper.py` | LaTeX + PDF + Markdown generation (+ self-citation) |
 | `gates.py` | Research-integrity constitution gates |
 | `evolution.py` | Darwinian fitness for the researcher doctrine |
-| `pipeline.py` | End-to-end `produce_paper` + 24/7 `serve` |
+| `models.py` | Latest Ollama Cloud model selection |
+| `pipeline.py` | End-to-end compounding `produce_paper` + 24/7 `serve` |
 | `capability.py` | NYX `Capability` wiring |
 | `roles.py` | The `researcher` agent genome (registered into NYX) |
 

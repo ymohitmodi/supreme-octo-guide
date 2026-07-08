@@ -48,9 +48,37 @@ NYX_USER_AGENT=dark-factory/0.1 (+research; you@example.com)
 ```
 
 Cloud models run server-side, so the GPU-less 12 GB mini-PC only orchestrates.
-Re-run `doctor`; the brain line should read `Ollama Cloud`. Now idea mining, the
-novelty bar-raiser, and revision use the model, and ingestion augments the corpus
-from live arXiv.
+The factory pins the latest high-accuracy models (GLM-5.2, DeepSeek-V4-Pro)
+automatically unless you override `NYX_MODEL_*`. Re-run `doctor`; the brain line
+should read `Ollama Cloud` and show the models. Now idea mining, the novelty
+bar-raiser, thoroughness review, and build-on extension all use the model.
+
+### arXiv MCP server (SOTA ingestion + citation graph)
+
+For live literature ingestion and citation-graph-driven "build on this" targeting,
+register the arXiv MCP server once:
+
+```bash
+uv tool install "arxiv-mcp-server[pro]"   # needs uv: https://astral.sh/uv
+python -m darkfactory mcp-init            # writes it into NYX's MCP manifest
+```
+
+NYX launches it via `uvx`/stdio and exposes it as `mcp.arxiv-mcp-server`. Without
+it, ingestion falls back to the direct arXiv API and the curated corpus.
+
+### Compounding across cycles
+
+Quality compounds through the offline research ledger. Inspect it any time:
+
+```bash
+python -m darkfactory ledger                         # capital, bar, recent contributions
+python -m darkfactory ledger --lineage prompt-injection   # the build-on chain
+```
+
+`serve` and the NYX mission share one ledger, so each paper builds on the last and
+the novelty bar ratchets up. The ledger persists at
+`.darkfactory/contributions.jsonl` — commit it (or back it up) to keep compounding
+across ephemeral environments.
 
 ## 4. Continuous operation
 

@@ -203,19 +203,36 @@ class IngestResult:
     corpus: list[Paper]
     live: int = 0
     cached: int = 0
+    mcp: int = 0
 
     def stats(self) -> dict:
         return {"topic": self.topic, "papers": len(self.corpus),
-                "live": self.live, "curated": self.cached}
+                "live": self.live, "mcp": self.mcp, "curated": self.cached}
 
 
-def ingest_topic(topic: Topic, fetcher=None, memory=None, max_results: int = 12) -> IngestResult:
-    """Build the prior-art corpus for a topic: curated ∪ live arXiv (best-effort)."""
+def ingest_topic(topic: Topic, fetcher=None, memory=None, ctx=None,
+                 max_results: int = 12) -> IngestResult:
+    """Build the prior-art corpus for a topic: curated ∪ arXiv MCP ∪ arXiv API.
+
+    Prefers the arxiv-mcp-server (richer, cached, citation-aware) when it is
+    registered; falls back to the direct arXiv API via NYX's web fetcher; and
+    always includes the curated landmark corpus so the run never blocks.
+    """
     curated = corpus_for(topic.slug)
+    # 1) arXiv MCP server (preferred live source).
+    mcp_papers: list[Paper] = []
+    if ctx is not None:
+        try:
+            from .arxiv_mcp import search_arxiv_mcp
+            query = " OR ".join(topic.keywords or (topic.name,))
+            mcp_papers = search_arxiv_mcp(ctx, query, topic.slug, max_results=max_results)
+        except Exception:  # noqa: BLE001 — best-effort
+            mcp_papers = []
+    # 2) Direct arXiv API (fallback / augmentation).
     live = fetch_arxiv(topic, fetcher=fetcher, max_results=max_results)
     seen = {p.title.lower() for p in curated}
     merged = list(curated)
-    for p in live:
+    for p in mcp_papers + live:
         if p.title.lower() not in seen:
             merged.append(p)
             seen.add(p.title.lower())
@@ -226,7 +243,8 @@ def ingest_topic(topic: Topic, fetcher=None, memory=None, max_results: int = 12)
                 kind="research", tags=["ai-security", topic.slug, "prior-art", p.source],
                 source=p.source, weight=1.0, trusted=False,
             )
-    return IngestResult(topic=topic.slug, corpus=merged, live=len(live), cached=len(curated))
+    return IngestResult(topic=topic.slug, corpus=merged, live=len(live),
+                        cached=len(curated), mcp=len(mcp_papers))
 
 
 def to_json(papers: list[Paper]) -> str:

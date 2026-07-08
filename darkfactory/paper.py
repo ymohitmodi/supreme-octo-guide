@@ -28,12 +28,30 @@ from .novelty import NoveltyReport
 AUTHOR = "NYX Dark Factory — Autonomous AI-Security Research Team"
 
 
+# Unicode math/Greek symbols the experiments use → LaTeX (pdflatex can't render
+# these directly without extra packages). Mapped before escaping.
+_UNICODE_TEX = {
+    "ε": r"$\epsilon$", "∞": r"$\infty$", "×": r"$\times$", "→": r"$\rightarrow$",
+    "≥": r"$\geq$", "≤": r"$\leq$", "±": r"$\pm$", "≈": r"$\approx$", "·": r"$\cdot$",
+    "α": r"$\alpha$", "β": r"$\beta$", "λ": r"$\lambda$", "σ": r"$\sigma$",
+    "μ": r"$\mu$", "θ": r"$\theta$", "Δ": r"$\Delta$", "∈": r"$\in$",
+    "—": "---", "–": "--", "“": "``", "”": "''", "’": "'", "‘": "`", "…": r"\ldots{}",
+}
+_ESCAPE = {"&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_",
+           "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}
+
+
 def _tex_escape(s: str) -> str:
-    repl = {"&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_",
-            "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}
     out = []
     for ch in s:
-        out.append(repl.get(ch, ch))
+        if ch in _UNICODE_TEX:
+            out.append(_UNICODE_TEX[ch])         # already LaTeX; don't re-escape
+        elif ch in _ESCAPE:
+            out.append(_ESCAPE[ch])
+        elif ord(ch) < 128:
+            out.append(ch)
+        else:
+            out.append("")                       # drop any other non-ASCII (safety)
     return "".join(out)
 
 
@@ -108,7 +126,7 @@ class PaperArtifact:
 
 
 def build_latex(idea: Idea, exp: ExperimentResult, report: NoveltyReport,
-                corpus: list[PriorPaper]) -> str:
+                corpus: list[PriorPaper], builds_on_titles: list[str] | None = None) -> str:
     venue = VENUES_BY_SLUG.get(idea.target_venue)
     venue_name = venue.name if venue else idea.target_venue
     # Ground related work in the ACTUAL nearest prior art the bar-raiser found.
@@ -127,6 +145,21 @@ def build_latex(idea: Idea, exp: ExperimentResult, report: NoveltyReport,
         for p in cited) or "We position this work against the closest prior art below."
     bib = "\n".join(_bibitem(p) for p in cited) or \
         "\\bibitem{none} No close prior art was retrieved for this direction."
+
+    # Compounding: cite the factory's own prior contribution this paper builds on.
+    builds_on_block = ""
+    if builds_on_titles:
+        items = "".join(
+            f"\\bibitem{{ours{i}}} {_tex_escape(AUTHOR)}. \\emph{{{_tex_escape(t)}}}. "
+            "Prior work by this team.\n"
+            for i, t in enumerate(builds_on_titles))
+        bib = bib + "\n" + items
+        cite_ours = "".join(f"~\\cite{{ours{i}}}" for i in range(len(builds_on_titles)))
+        prior = "; ".join(_tex_escape(t) for t in builds_on_titles)
+        builds_on_block = (
+            f"This paper directly extends our prior work{cite_ours} ({prior}), advancing "
+            "that result one concrete step further; the comparison below is head to head "
+            "against it.")
 
     abstract = (
         f"{_tex_escape(idea.hypothesis)} We adopt a {_tex_escape(idea.threat_model)} "
@@ -164,6 +197,7 @@ attacker rather than a fixed test distribution, so reported robustness is not an
 artifact of the evaluation set.
 
 \\section{{Related Work}}
+{builds_on_block}
 {related_lines}
 
 \\section{{Approach}}
@@ -226,6 +260,9 @@ def build_markdown(idea: Idea, exp: ExperimentResult, report: NoveltyReport) -> 
 
 def compile_pdf(tex_path: str, timeout: int = 60) -> str | None:
     """Compile the .tex to PDF if a TeX engine is installed; return the PDF path or None."""
+    import os
+    if os.environ.get("DARKFACTORY_SKIP_PDF"):   # fast path for tests / batch runs
+        return None
     engine = shutil.which("pdflatex") or shutil.which("tectonic")
     if not engine:
         return None
@@ -245,12 +282,13 @@ def compile_pdf(tex_path: str, timeout: int = 60) -> str | None:
 
 
 def write_paper(idea: Idea, exp: ExperimentResult, report: NoveltyReport,
-                corpus: list[PriorPaper], outdir: str, gate_check=None) -> PaperArtifact:
+                corpus: list[PriorPaper], outdir: str, gate_check=None,
+                builds_on_titles: list[str] | None = None) -> PaperArtifact:
     """Write .tex + .md for a paper, run the integrity gate, and try PDF compilation."""
     out = Path(outdir)
     out.mkdir(parents=True, exist_ok=True)
     stem = idea.id.replace("idea-", "paper-")
-    tex = build_latex(idea, exp, report, corpus)
+    tex = build_latex(idea, exp, report, corpus, builds_on_titles=builds_on_titles)
     md = build_markdown(idea, exp, report)
     tex_path = out / f"{stem}.tex"
     md_path = out / f"{stem}.md"

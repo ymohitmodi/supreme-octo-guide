@@ -248,6 +248,107 @@ def revise_idea(idea: Idea, reason: str, topic: Topic, ctx=None) -> Idea:
     return idea
 
 
+# ---------------------------------------------------------------------------
+# Compounding: extend a prior contribution one concrete step further. This is how
+# quality compounds — each cycle stands on the factory's best prior work on a
+# topic rather than starting from scratch.
+# ---------------------------------------------------------------------------
+_EXTENSION_FRAMES = (
+    ("Tightening the certified bound on {asset} under {threat}",
+     "Building on our prior result, a stronger {method} yields a tighter certified "
+     "guarantee for {asset} than previously achieved.",
+     "We hypothesize the residual gap left by prior work on {asset} is closable with "
+     "{method} under the same {threat} threat model.",
+     "Extend the prior method with {method}, prove the tighter bound, and re-run the "
+     "adaptive-attack evaluation head to head against the prior result.",
+     "A strictly tighter certified bound on {asset} than our prior work, with a "
+     "controlled head-to-head comparison."),
+    ("From detection to prevention of {threat} on {asset}",
+     "Building on our prior detector for {threat}, we escalate from detecting to "
+     "provably preventing it on {asset}.",
+     "We hypothesize the signal our prior detector used is strong enough to drive a "
+     "{method} preventive control at deployable false-positive rates.",
+     "Convert the detector into a {method} enforcement layer and measure prevention "
+     "rate vs utility against unseen {threat} payloads.",
+     "A prevention control that dominates our prior detection result on the utility/"
+     "security frontier."),
+    ("Cross-threat generalization of {method} for {asset}",
+     "Building on our prior single-threat result, we test whether the {method} defense "
+     "of {asset} generalizes to {threat}.",
+     "We hypothesize the {method} defense transfers to {threat} with bounded loss of "
+     "guarantee on {asset}.",
+     "Re-evaluate the prior defense under {threat} and quantify the transfer gap with a "
+     "shared, contamination-controlled benchmark.",
+     "The first cross-threat generalization study of the prior {method} defense, with a "
+     "released transfer benchmark."),
+)
+
+
+def extend_idea(prior_title: str, prior_topic_slug: str, topic: Topic,
+                ctx=None, variant: int = 0) -> Idea:
+    """Produce a NEW idea that builds one step on a prior contribution's result.
+
+    Deterministic offline (escalate the prior result along an extension frame);
+    live, ask the brain to propose the strongest next step beyond the prior work.
+    The returned idea's ``lineage`` references the prior work so the pipeline can
+    record the build-on edge in the compounding ledger.
+    """
+    if ctx is not None and getattr(ctx, "provider", None) is not None \
+            and not getattr(ctx.config, "mock_mode", True):
+        live = _extend_live(prior_title, topic, ctx)
+        if live is not None:
+            live.lineage = [prior_title]
+            return live
+    threat = topic.threat_models[variant % len(topic.threat_models)]
+    method = topic.methods[(variant + 1) % len(topic.methods)]
+    asset = topic.assets[variant % len(topic.assets)]
+    frame = _EXTENSION_FRAMES[variant % len(_EXTENSION_FRAMES)]
+    title_t, hyp_t, hh_t, appr_t, contrib_t = frame
+    short_prior = prior_title[:40].rstrip()
+    subs = {"threat": threat, "method": method, "asset": asset, "prior": short_prior}
+    title = title_t.format(**subs)
+    idea = Idea(
+        id=_idea_id(prior_topic_slug, title + str(variant)),
+        topic=prior_topic_slug, title=title,
+        hypothesis=hh_t.format(**subs), approach=appr_t.format(**subs),
+        contribution=contrib_t.format(**subs), threat_model=threat,
+        target_venue=primary_venue(topic.slug).slug,
+        lineage=[prior_title],
+    )
+    return idea
+
+
+def _extend_live(prior_title: str, topic: Topic, ctx) -> Idea | None:
+    from nyx.providers.base import ChatMessage
+    prompt = (
+        f"Our team already published: \"{prior_title}\" on {topic.name}. Propose the "
+        "single strongest NEXT paper that BUILDS ON it — a concrete step further "
+        "(tighter bound, detection→prevention, new threat model), not a restatement.\n"
+        "Return JSON: {\"title\":..,\"threat_model\":..,\"hypothesis\":..,\"approach\":..,"
+        "\"contribution\":..}. JSON only."
+    )
+    try:
+        out = ctx.provider.chat(ctx.config.model("architect"),
+                                [ChatMessage(role="user", content=prompt)],
+                                temperature=0.6, max_tokens=700).text
+        obj = _extract_json_object(out)
+        if not obj:
+            return None
+        title = str(obj.get("title", "")).strip()
+        if not title:
+            return None
+        return Idea(
+            id=_idea_id(topic.slug, title), topic=topic.slug, title=title,
+            hypothesis=str(obj.get("hypothesis", "")).strip(),
+            approach=str(obj.get("approach", "")).strip(),
+            contribution=str(obj.get("contribution", "")).strip(),
+            threat_model=str(obj.get("threat_model", topic.threat_models[0])).strip(),
+            target_venue=primary_venue(topic.slug).slug,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _revise_live(idea: Idea, reason: str, topic: Topic, ctx) -> Idea | None:
     from nyx.providers.base import ChatMessage
 

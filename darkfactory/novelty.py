@@ -111,7 +111,7 @@ def _heuristic_dims(idea: Idea) -> tuple[float, float, float]:
     return impact, feasibility, rigor
 
 
-def assess_offline(idea: Idea, corpus: list[Paper]) -> NoveltyReport:
+def assess_offline(idea: Idea, corpus: list[Paper], bar: float = NOVELTY_BAR) -> NoveltyReport:
     idea_text = f"{idea.title}. {idea.hypothesis} {idea.approach} {idea.contribution}"
     docs = [p.text for p in corpus] + [idea_text]
     corpus_tokens = [_tokens(d) for d in docs]
@@ -129,17 +129,17 @@ def assess_offline(idea: Idea, corpus: list[Paper]) -> NoveltyReport:
         idea_id=idea.id, novelty=novelty, impact=impact,
         feasibility=feasibility, rigor=rigor, nearest=sims[:5],
     )
-    _finalize(report, idea)
+    _finalize(report, idea, bar)
     return report
 
 
-def assess_live(idea: Idea, corpus: list[Paper], ctx) -> NoveltyReport:
+def assess_live(idea: Idea, corpus: list[Paper], ctx, bar: float = NOVELTY_BAR) -> NoveltyReport:
     """LLM bar-raiser. Falls back to the deterministic assessor on any failure."""
     from nyx.providers.base import ChatMessage
 
     # Seed the judge with the offline nearest-neighbors so it reasons about the
     # genuinely closest prior art rather than hallucinating comparisons.
-    base = assess_offline(idea, corpus)
+    base = assess_offline(idea, corpus, bar)
     prior = "\n".join(f"- {t} (sim {s})" for t, s in base.nearest) or "(none)"
     prompt = (
         "You are a bar-raising program-committee reviewer for a top AI-security venue. "
@@ -174,23 +174,26 @@ def assess_live(idea: Idea, corpus: list[Paper], ctx) -> NoveltyReport:
                 nearest=base.nearest,
                 rationale=str(obj.get("rationale", ""))[:200],
             )
-            _finalize(report, idea)
+            _finalize(report, idea, bar)
             return report
     except Exception:  # noqa: BLE001 — the bar-raiser must never crash a run
         pass
     return base
 
 
-def _finalize(report: NoveltyReport, idea: Idea) -> None:
-    """Write scores back onto the idea and set the verdict against the bar."""
+def _finalize(report: NoveltyReport, idea: Idea, bar: float = NOVELTY_BAR) -> None:
+    """Write scores back onto the idea and set the verdict against the (dynamic) bar.
+
+    ``bar`` defaults to the base novelty bar but rises over time via the
+    compounding ledger's ratchet, so later cycles must be more novel to pass."""
     idea.novelty = report.novelty
     idea.impact = report.impact
     idea.feasibility = report.feasibility
     idea.rigor = report.rigor
     idea.nearest_prior = [t for t, _ in report.nearest]
-    if report.novelty >= NOVELTY_BAR and idea.fitness >= FITNESS_BAR:
+    if report.novelty >= bar and idea.fitness >= FITNESS_BAR:
         report.verdict = "pass"
-    elif report.novelty >= 0.45 and idea.fitness >= 0.5:
+    elif report.novelty >= max(0.45, bar - 0.17) and idea.fitness >= 0.5:
         report.verdict = "revise"
     else:
         report.verdict = "reject"
@@ -202,9 +205,9 @@ def _finalize(report: NoveltyReport, idea: Idea) -> None:
         )
 
 
-def assess(idea: Idea, corpus: list[Paper], ctx=None) -> NoveltyReport:
-    """Bar-raise an idea (live LLM judge when a brain is available)."""
+def assess(idea: Idea, corpus: list[Paper], ctx=None, bar: float = NOVELTY_BAR) -> NoveltyReport:
+    """Bar-raise an idea against a novelty ``bar`` (live LLM judge when available)."""
     if ctx is not None and getattr(ctx, "provider", None) is not None \
             and not getattr(ctx.config, "mock_mode", True):
-        return assess_live(idea, corpus, ctx)
-    return assess_offline(idea, corpus)
+        return assess_live(idea, corpus, ctx, bar)
+    return assess_offline(idea, corpus, bar)

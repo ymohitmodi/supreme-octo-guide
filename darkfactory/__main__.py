@@ -30,20 +30,26 @@ def _resolve_topic(name: str):
 def _live_ctx():
     """Build a lightweight context that lights up the brain when OLLAMA_API_KEY is set.
 
-    Offline (mock mode) this returns None, so the whole pipeline stays deterministic.
+    Pins the latest Ollama Cloud models for highest accuracy and wires a NYX
+    toolbox (which registers the arxiv-mcp-server from the manifest), so live runs
+    ingest via MCP and mine/judge with the frontier model. Offline (mock mode)
+    this returns None, so the whole pipeline stays deterministic.
     """
     try:
         from nyx.config import load_config
-        cfg = load_config()
+        from .models import apply_models
+        cfg = apply_models(load_config())   # latest cloud models, unless overridden
         if cfg.mock_mode:
             return None
         from nyx.embeddings import embedder_for
         from nyx.memory import MemoryStore
         from nyx.providers import build_provider
+        from nyx.tools import build_toolbox
         provider = build_provider(cfg)
         memory = MemoryStore(cfg.memory_path, embedder=embedder_for(cfg, provider))
+        toolbox = build_toolbox(cfg, provider=provider)  # registers mcp.* from manifest
         return types.SimpleNamespace(config=cfg, provider=provider, memory=memory,
-                                     lessons=[], cycle_index=0)
+                                     toolbox=toolbox, lessons=[], cycle_index=0)
     except Exception:  # noqa: BLE001 — fall back to offline
         return None
 
@@ -135,6 +141,37 @@ def cmd_evolve(args) -> int:
     return 0
 
 
+def cmd_mcp_init(args) -> int:
+    from nyx.config import load_config
+
+    from .arxiv_mcp import write_arxiv_manifest
+    cfg = load_config()
+    path = write_arxiv_manifest(cfg.mcp_manifest, storage=args.storage)
+    print(f"Wrote MCP manifest: {path}")
+    print("Registered: arxiv-mcp-server (https://github.com/blazickjp/arxiv-mcp-server)")
+    print("Install it once with:  uv tool install \"arxiv-mcp-server[pro]\"")
+    print("NYX launches it via uvx/stdio; the [pro] extra adds semantic_search + "
+          "citation_graph, which the factory uses to find prior work to build on.")
+    print(f"Local paper storage: {args.storage}")
+    return 0
+
+
+def cmd_ledger(args) -> int:
+    from .memory import DEFAULT_LEDGER, ResearchLedger
+    ledger = ResearchLedger(args.path or DEFAULT_LEDGER)
+    if len(ledger) == 0:
+        print("Research ledger empty. Run `darkfactory serve` to accumulate contributions.")
+        return 0
+    print(ledger.summary())
+    if args.lineage:
+        print(f"\nDeepest lineage on topic {args.lineage!r}:")
+        best = ledger.best_for_topic(args.lineage)
+        if best:
+            for c in reversed(ledger.lineage(best.id)):
+                print(f"  #{c.cycle:03d} (depth {c.depth}) {c.title}")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     ok = True
     try:
@@ -148,11 +185,22 @@ def cmd_doctor(args) -> int:
     print(f"{'✓' if 'researcher' in ROLE_REGISTRY else '✗'} researcher role registered")
     print(f"{'✓' if get('ai-security-research') else '✗'} capability registered")
     from nyx.config import load_config
-    cfg = load_config()
+    from .models import apply_models
+    cfg = apply_models(load_config())
     print(f"• brain: {'MOCK (offline)' if cfg.mock_mode else 'Ollama Cloud @ ' + cfg.ollama_host}")
+    print(f"• models: architect={cfg.model_architect} reviewer={cfg.model_reviewer} "
+          f"fast={cfg.model_fast}")
+    import os
+    mcp = cfg.mcp_manifest
+    has_arxiv = os.path.exists(mcp) and "arxiv-mcp-server" in open(mcp).read() if os.path.exists(mcp) else False
+    print(f"• arXiv MCP: {'registered in ' + mcp if has_arxiv else 'not registered — run `darkfactory mcp-init`'}")
     import shutil
     tex = shutil.which("pdflatex") or shutil.which("tectonic")
     print(f"• TeX: {tex or 'not found — papers emit .tex + .md (no PDF)'}")
+    from .memory import DEFAULT_LEDGER, ResearchLedger
+    led = ResearchLedger(DEFAULT_LEDGER)
+    print(f"• ledger: {len(led)} contributions, capital={led.research_capital():.2f}, "
+          f"next bar={led.current_bar():.3f}")
     print(f"• topics: {len(TOPICS)} on the frontier")
     print("\nDoctor:", "healthy ✓" if ok else "issues found ✗")
     return 0
@@ -197,7 +245,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-g", "--generations", type=int, default=8)
     sp.set_defaults(func=cmd_evolve)
 
-    sp = sub.add_parser("doctor", help="verify NYX, brain, and TeX availability")
+    sp = sub.add_parser("mcp-init", help="register the arxiv-mcp-server in NYX's MCP manifest")
+    sp.add_argument("--storage", default=".darkfactory/arxiv", help="local paper storage path")
+    sp.set_defaults(func=cmd_mcp_init)
+
+    sp = sub.add_parser("ledger", help="show compounding research capital + contribution lineage")
+    sp.add_argument("--path", help="ledger path (default .darkfactory/contributions.jsonl)")
+    sp.add_argument("--lineage", help="show the deepest lineage for this topic slug")
+    sp.set_defaults(func=cmd_ledger)
+
+    sp = sub.add_parser("doctor", help="verify NYX, brain, MCP, and TeX availability")
     sp.set_defaults(func=cmd_doctor)
     return p
 

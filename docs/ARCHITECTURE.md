@@ -28,9 +28,32 @@ Our capability maps those hooks to research work:
 - **`benchmark(ctx)`** → the `ResearchBenchmark` the evolution engine selects
   against.
 
+## Compounding (`memory.py`)
+
+Every accepted paper is recorded as a `Contribution` in an offline, append-only
+ledger (`.darkfactory/contributions.jsonl`) with the lineage of what it builds on.
+Two mechanisms turn accumulation into *rising* quality:
+
+- **Build-on lineage** — before mining, `produce_paper` looks up the most impactful
+  prior contribution on the topic and asks `ideas.extend_idea` for candidates that
+  take it one concrete step further (tighter bound, detection→prevention, new
+  threat model). These compete with fresh ideas and are preferred when they clear
+  the bar, so contributions form a deepening chain (`depth` grows each cycle).
+- **Ratcheting bar** — `ResearchLedger.current_bar()` raises the novelty threshold
+  as `research_capital()` (sum of impact scores, amplified by lineage depth) grows,
+  bounded at 0.80. Later cycles must be more novel/impactful than earlier ones to
+  be accepted.
+
+The accepted paper self-cites the prior contribution it extends (`paper.py`
+`builds_on_titles`) and reports a head-to-head comparison. The ledger persists
+across runs, so the factory never starts cold.
+
 ## The pipeline (`pipeline.produce_paper`)
 
-1. **Ingest** (`ingest.ingest_topic`) — build the prior-art corpus for the topic.
+0. **Compound** — load the ledger, compute this cycle's ratcheting novelty bar,
+   and build extension candidates from the best prior contribution on the topic.
+1. **Ingest** (`ingest.ingest_topic`) — build the prior-art corpus: curated ∪
+   arXiv MCP server ∪ arXiv API (see below).
 2. **Mine** (`ideas.mine_ideas`) — generate candidate ideas. Live: the brain
    proposes ideas grounded in the recalled prior art. Offline: deterministic
    recombination of the topic's `threat_models × methods × assets` through four
@@ -45,8 +68,40 @@ Our capability maps those hooks to research work:
    benchmark for the topic family and collect metrics.
 5. **Write** (`paper.write_paper`) — assemble LaTeX/Markdown from the idea, the
    bar-raiser's report, and the experiment; compile PDF if TeX is present.
-6. **Gate** (`gates.check_research`) — the integrity constitution must pass;
-   acceptance requires clearing both the novelty bar and the gate.
+6. **Gate + review** — `gates.check_research` (integrity) and `review.review`
+   (conference-bar thoroughness) must both pass. Acceptance requires clearing the
+   ratcheting novelty bar **and** the integrity gate **and** the thoroughness
+   review — the "all publications must go through" bar-raiser.
+7. **Record** — an accepted paper is written to the ledger with its build-on
+   edge, so the next cycle compounds on it.
+
+## arXiv MCP + SOTA ingestion (`arxiv_mcp.py`, `ingest.py`)
+
+NYX's MCP support (`nyx.tools.mcp`) registers external tool servers from a
+manifest and exposes each as `mcp.<name>`; this capability is allowed `mcp.*`.
+`arxiv_mcp.write_arxiv_manifest` adds the
+[arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) (launched via
+`uvx`/stdio). When it is registered, `ingest_topic` calls its `search_papers` for
+SOTA, and the pipeline can use `citation_graph` (the server's `[pro]` extra) to
+find the exact prior work to build on. Everything is best-effort: with no MCP
+server, uv, or network, ingestion falls back to the direct arXiv API and then the
+curated corpus, so runs never block.
+
+## The conference-bar reviewer (`review.py`)
+
+Distinct from the novelty bar-raiser (which judges the *idea*), this judges the
+*paper*'s thoroughness against what a program committee rejects for: a precise
+threat model, a baseline comparison, quantitative results, reproducibility (all
+critical), plus ablation/trade-off, grounded related work, limitations, and ethics.
+Offline it inspects the manuscript + experiment structurally; live, an LLM
+PC-reviewer refines the borderline call. A critical miss fails the paper outright.
+
+## Latest models (`models.py`)
+
+`apply_models(cfg)` upgrades a NYX `Config` to the highest-accuracy Ollama Cloud
+models (GLM-5.2 for reasoning/writing, DeepSeek-V4-Pro for the strict reviewer)
+without clobbering an explicit `NYX_MODEL_*` override. Applied by the CLI's live
+context and shown by `doctor`.
 
 ## The bar-raiser (`novelty.py`)
 

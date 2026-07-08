@@ -29,6 +29,16 @@ python -m pip install --upgrade pip
 pip install -e ".[dev]"
 pip install requests    # enables live Ollama Cloud + web ingestion
 
+# 3b) arXiv MCP server (SOTA ingestion + citation graph for compounding).
+#     Needs uv (https://astral.sh/uv). NYX launches it via uvx/stdio.
+if (Get-Command uv -ErrorAction SilentlyContinue) {
+    uv tool install "arxiv-mcp-server[pro]"
+    python -m darkfactory mcp-init            # register it in NYX's MCP manifest
+} else {
+    Write-Host "uv not found. Install it (https://astral.sh/uv) then run:" -ForegroundColor Yellow
+    Write-Host '   uv tool install "arxiv-mcp-server[pro]"; python -m darkfactory mcp-init' -ForegroundColor White
+}
+
 # 4) Configure the Ollama Cloud brain. Cloud models run server-side, so a
 #    GPU-less 12 GB mini-PC is plenty. Create a .env with your key:
 if (-not (Test-Path ".env")) {
@@ -37,10 +47,11 @@ if (-not (Test-Path ".env")) {
 # fully offline in deterministic MOCK mode.
 OLLAMA_API_KEY=
 OLLAMA_HOST=https://ollama.com
-# Cloud model names (adjust to what your account can call):
-NYX_MODEL_ARCHITECT=qwen3.5-coder:480b-cloud
-NYX_MODEL_REVIEWER=glm-5.1:cloud
-NYX_MODEL_FAST=gemma4:cloud
+# Latest Ollama Cloud models (highest accuracy, mid-2026). Adjust to your account.
+NYX_MODEL_ARCHITECT=glm-5.2:cloud
+NYX_MODEL_CODER=glm-5.2:cloud
+NYX_MODEL_REVIEWER=deepseek-v4-pro:cloud
+NYX_MODEL_FAST=qwen3.5:cloud
 # Be a good web citizen when ingesting arXiv:
 NYX_USER_AGENT=dark-factory/0.1 (+research; you@example.com)
 "@ | Out-File -Encoding utf8 .env

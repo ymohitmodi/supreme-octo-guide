@@ -272,12 +272,12 @@ def _fgsm(w: list[float], x: list[float], y: int, eps: float) -> list[float]:
 def run_robustness(seed: int = 1337) -> ExperimentResult:
     rng = random.Random(seed)
     d = 20
-    Xtr, ytr, w_true = _make_linear_data(rng, 400, d)
-    Xte, yte, _ = _make_linear_data(rng, 300, d, w_true=w_true)
-    w_std = train_logreg(Xtr, ytr, epochs=400, lr=0.15, seed=seed)
+    Xtr, ytr, w_true = _make_linear_data(rng, 300, d)
+    Xte, yte, _ = _make_linear_data(rng, 200, d, w_true=w_true)
+    w_std = train_logreg(Xtr, ytr, epochs=250, lr=0.15, seed=seed)
     # Proper adversarial training: FGSM examples are recrafted against the model
     # each epoch (train-time ε=0.2), so the defense actually earns robustness.
-    w_rob = train_logreg_adv(Xtr, ytr, eps_train=0.2, epochs=400, lr=0.15, seed=seed + 1)
+    w_rob = train_logreg_adv(Xtr, ytr, eps_train=0.2, epochs=250, lr=0.15, seed=seed + 1)
 
     epsilons = [0.0, 0.05, 0.1, 0.2, 0.3]
     rows, series_std, series_rob = [], [], []
@@ -300,7 +300,7 @@ def run_robustness(seed: int = 1337) -> ExperimentResult:
     return ExperimentResult(
         id=f"robust-{seed}", title="Adversarial robustness: standard vs adversarial training",
         family="robustness",
-        dataset="700 synthetic samples, 20 features, logistic decision boundary",
+        dataset="500 synthetic samples, 20 features, logistic decision boundary",
         method="FGSM evasion across ε; defense = FGSM adversarial training",
         metrics=[("clean acc", f"{clean:.3f}"), ("robust acc @ε=0.3 (std)", f"{worst_std:.3f}"),
                  ("robust acc @ε=0.3 (adv-trained)", f"{worst_rob:.3f}")],
@@ -323,7 +323,7 @@ def run_robustness(seed: int = 1337) -> ExperimentResult:
 # ---------------------------------------------------------------------------
 def run_membership_inference(seed: int = 1337) -> ExperimentResult:
     rng = random.Random(seed)
-    d = 60
+    d = 50
     # One shared ground-truth boundary; each size draws fresh members + an
     # equal-size held-out non-member set from the same distribution.
     w_true = [rng.uniform(-1, 1) for _ in range(d)]
@@ -331,7 +331,7 @@ def run_membership_inference(seed: int = 1337) -> ExperimentResult:
     def attack(n: int) -> tuple[float, float, float, float]:
         Xtr, ytr, _ = _make_linear_data(rng, n, d, w_true=w_true, sharpness=1.2)
         Xte, yte, _ = _make_linear_data(rng, n, d, w_true=w_true, sharpness=1.2)
-        w = train_logreg(Xtr, ytr, epochs=1500, lr=0.3, seed=seed)
+        w = train_logreg(Xtr, ytr, epochs=400, lr=0.3, seed=seed)
         loss_tr = [-bce_loss(w, x, y) for x, y in zip(Xtr, ytr)]  # negate: high = member
         loss_te = [-bce_loss(w, x, y) for x, y in zip(Xte, yte)]
         a = auc(loss_tr, loss_te)
@@ -339,7 +339,7 @@ def run_membership_inference(seed: int = 1337) -> ExperimentResult:
         gap = accuracy(w, Xtr, ytr) - accuracy(w, Xte, yte)
         return a, tpr, gap, accuracy(w, Xte, yte)
 
-    sizes = [40, 80, 200, 600]
+    sizes = [40, 80, 200, 500]
     rows, series = [], []
     results = {}
     for n in sizes:
