@@ -156,7 +156,7 @@ def assess_live(idea: Idea, corpus: list[Paper], ctx, bar: float = NOVELTY_BAR) 
     try:
         out = ctx.provider.chat(ctx.config.model("reviewer"),
                                 [ChatMessage(role="user", content=prompt)],
-                                temperature=0.0, max_tokens=400).text
+                                temperature=0.0, max_tokens=600).text
         from .ideas import _extract_json_object
         obj = _extract_json_object(out)
         if obj:

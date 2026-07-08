@@ -70,6 +70,7 @@ class PaperResult:
     refine_rounds: int = 0
     refine_resolved: list[str] = field(default_factory=list)
     critique_directives: list[str] = field(default_factory=list)
+    artifact_bundle: object = None
 
     def summary(self) -> str:
         a = "ACCEPTED" if self.accepted else "REJECTED"
@@ -94,6 +95,8 @@ class PaperResult:
             f"  artifact={(self.artifact.tex_path if self.artifact else 'n/a')}{pdf}\n"
             f"  gate={'clean' if not (self.artifact and self.artifact.violations) else self.artifact.violations}"
             f" | research_capital={self.capital:.2f}"
+            + (f"\n  oss_artifact={self.artifact_bundle.path} "
+               f"(reproduces={self.artifact_bundle.reproduces})" if self.artifact_bundle else "")
         )
 
 
@@ -226,6 +229,17 @@ def produce_paper(topic_slug: str, ctx=None, outdir: str = "output/papers",
         )
         ledger.add(contrib)
 
+    # Ship a self-contained, runnable OSS artifact that reproduces the paper's
+    # numbers — the open-source contribution alongside each accepted publication.
+    bundle = None
+    if accepted:
+        from .artifacts import emit_artifact
+        try:
+            bundle = emit_artifact(idea, exp, outdir=str(Path(outdir).parent / "artifacts"),
+                                   tex_path=artifact.tex_path, md_path=artifact.md_path, ctx=ctx)
+        except Exception:  # noqa: BLE001 — artifact emission must not fail a run
+            bundle = None
+
     return PaperResult(
         topic=topic.slug, idea=idea, report=report, experiment=exp, artifact=artifact,
         accepted=accepted, revisions=revisions, considered=considered, ingest=ingest,
@@ -233,6 +247,7 @@ def produce_paper(topic_slug: str, ctx=None, outdir: str = "output/papers",
         builds_on=builds_on_titles, capital=ledger.research_capital(),
         critique=refined.final, refine_rounds=refined.rounds,
         refine_resolved=refined.resolved, critique_directives=refined.directives,
+        artifact_bundle=bundle,
     )
 
 
@@ -248,10 +263,12 @@ class ServeReport:
     capital_end: float = 0.0
     bar_start: float = 0.0
     bar_end: float = 0.0
+    artifacts: int = 0
+    auto_evolver: object = None
 
     def summary(self) -> str:
         lines = [f"Dark factory produced {len(self.produced)} papers, "
-                 f"{len(self.accepted)} cleared the bar. "
+                 f"{len(self.accepted)} cleared the bar ({self.artifacts} OSS artifacts). "
                  f"Research capital {self.capital_start:.2f} → {self.capital_end:.2f}, "
                  f"novelty bar {self.bar_start:.3f} → {self.bar_end:.3f} (compounding):"]
         for r in self.produced:
@@ -260,29 +277,43 @@ class ServeReport:
             lines.append(f"  {mark} [{r.topic}] {r.idea.title[:56]}{depth}  "
                          f"(nov {r.report.novelty:.2f}/bar {r.bar:.2f}, "
                          f"{r.experiment.headline().split(';')[0]})")
+        if self.auto_evolver and self.auto_evolver.events:
+            lines.append(self.auto_evolver.summary())
         return "\n".join(lines)
 
 
 def serve(topics: list[str] | None = None, ctx=None, outdir: str = "output/papers",
           max_papers: int = 10, seed: int = 1337, on_paper=None,
-          ledger: ResearchLedger | None = None) -> ServeReport:
+          ledger: ResearchLedger | None = None, auto_evolve_every: int = 0) -> ServeReport:
     """Continuous production across topics — the 24/7 loop, bounded by max_papers.
 
     A single :class:`ResearchLedger` is shared across the whole run so quality
-    *compounds*: each paper stands on the accumulated contributions, the novelty
-    bar ratchets up with research capital, and later papers build on earlier ones.
-    For a true always-on daemon, wrap this in the CLI ``serve`` command or the NYX
-    CapabilityRunner with ``keep_going=True`` (both persist the ledger to disk).
+    *compounds*. With ``auto_evolve_every > 0``, the internal critic's recurring
+    weaknesses automatically trigger a Darwin-Gödel evolution round every N papers
+    (feedback-driven self-improvement). For a true always-on daemon, wrap this in
+    the CLI ``serve`` command or the NYX CapabilityRunner with ``keep_going=True``.
     """
+    from .autoevolve import AutoEvolver
     slugs = topics or [t.slug for t in TOPICS]
     ledger = ledger if ledger is not None else ResearchLedger()
     report = ServeReport(capital_start=ledger.research_capital(), bar_start=ledger.current_bar())
+    evolver = AutoEvolver(every=auto_evolve_every) if auto_evolve_every else None
+    report.auto_evolver = evolver
+    cfg = getattr(ctx, "config", None)
+    if evolver is not None and cfg is None:
+        from nyx.config import load_config
+        cfg = load_config()
     i = 0
     while len(report.produced) < max_papers:
         slug = slugs[i % len(slugs)]
         # Vary the seed per paper so successive papers on a topic differ.
         result = produce_paper(slug, ctx=ctx, outdir=outdir, seed=seed + i, ledger=ledger)
         report.produced.append(result)
+        if result.artifact_bundle:
+            report.artifacts += 1
+        if evolver is not None:
+            evolver.observe(result)
+            evolver.maybe_evolve(cfg)      # auto-trigger on schedule + pressure
         if on_paper:
             on_paper(result)
         i += 1

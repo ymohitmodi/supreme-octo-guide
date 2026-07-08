@@ -101,7 +101,7 @@ def review_live(idea: Idea, exp: ExperimentResult, tex: str, n_citations: int, c
     try:
         out = ctx.provider.chat(ctx.config.model("reviewer"),
                                 [ChatMessage(role="user", content=prompt)],
-                                temperature=0.0, max_tokens=400).text
+                                temperature=0.0, max_tokens=700).text
         from .ideas import _extract_json_object
         obj = _extract_json_object(out)
         if obj and isinstance(obj.get("criteria"), dict):

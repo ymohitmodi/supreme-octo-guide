@@ -13,12 +13,15 @@ from __future__ import annotations
 __version__ = "0.1.0"
 
 from . import roles  # noqa: F401 — registers the researcher role on import
+from .artifacts import emit_artifact
+from .autoevolve import AutoEvolver
 from .capability import AISecurityResearchCapability
 from .critique import critique
 from .ideas import Idea, extend_idea, mine_ideas
 from .knowledge import sync_skills
+from .longform import generate_document
 from .memory import Contribution, ResearchLedger
-from .models import apply_models
+from .models import apply_models, output_budget, spec_for
 from .novelty import assess
 from .pipeline import PaperResult, produce_paper, serve
 from .refine import refine
@@ -50,6 +53,11 @@ __all__ = [
     "critique",
     "refine",
     "sync_skills",
+    "emit_artifact",
+    "generate_document",
+    "AutoEvolver",
+    "output_budget",
+    "spec_for",
     "Idea",
     "Contribution",
     "ResearchLedger",

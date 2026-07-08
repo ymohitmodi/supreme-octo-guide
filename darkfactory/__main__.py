@@ -111,7 +111,8 @@ def cmd_paper(args) -> int:
 def cmd_serve(args) -> int:
     ctx = _live_ctx()
     topics = args.topics.split(",") if args.topics else None
-    report = serve(topics=topics, ctx=ctx, outdir=args.outdir, max_papers=args.max)
+    report = serve(topics=topics, ctx=ctx, outdir=args.outdir, max_papers=args.max,
+                   auto_evolve_every=args.auto_evolve_every)
     index = write_index(report, outdir=args.outdir)
     print(report.summary())
     print(f"\nIndex: {index}")
@@ -138,6 +139,57 @@ def cmd_evolve(args) -> int:
           f"archive={report.archive_size}")
     print(f"  best {report.best_score_before} → {report.best_score_after} "
           f"(gain {report.gain})")
+    return 0
+
+
+def cmd_limits(args) -> int:
+    """Show each model's context/output budget and the long-form strategy."""
+    from nyx.config import load_config
+
+    from .models import LATEST_OLLAMA_CLOUD, WORKING_CONTEXT_TOKENS, output_budget, spec_for
+    from .models import apply_models
+    cfg = apply_models(load_config())
+    print("Model capacity (context in ⇄ single-completion out):\n")
+    for role in ("architect", "reviewer", "fast"):
+        model = cfg.model(role)
+        spec = spec_for(model)
+        print(f"  {role:9s} {model:26s} context={spec.context_window:>9,}  "
+              f"max_output={spec.max_output:>7,}  per-call={output_budget(cfg, role):>6,}")
+    print(f"\nWorking context filled per prompt: {WORKING_CONTEXT_TOKENS:,} tokens "
+          "(headroom reserved for output).")
+    print("Long artifacts (papers, code repos) are generated section-by-section and "
+          "continued as needed (longform.py), so total length is UNBOUNDED by any one "
+          "completion — nothing truncates.")
+    _ = LATEST_OLLAMA_CLOUD
+    return 0
+
+
+def cmd_artifact(args) -> int:
+    """Produce a paper and emit its self-contained, runnable OSS artifact bundle."""
+    from .pipeline import produce_paper
+    topic = _resolve_topic(args.topic)
+    ctx = _live_ctx()
+    result = produce_paper(topic.slug, ctx=ctx, outdir=args.outdir, seed=args.seed)
+    print(result.summary())
+    if result.artifact_bundle:
+        b = result.artifact_bundle
+        print(f"\nOSS artifact: {b.path}\n  files: {', '.join(b.files)}"
+              f"\n  reproduces released metrics: {b.reproduces}"
+              f"\n  run it: cd {b.path} && python run_benchmark.py")
+    else:
+        print("\n(no artifact — paper was not accepted)")
+    return 0 if result.accepted else 1
+
+
+def cmd_autoevolve(args) -> int:
+    """Run the auto-evolve loop: produce papers and let recurring critique weaknesses
+    trigger Darwin-Gödel evolution of the researcher doctrine on a schedule."""
+    from .pipeline import serve
+    ctx = _live_ctx()
+    topics = args.topics.split(",") if args.topics else None
+    report = serve(topics=topics, ctx=ctx, outdir=args.outdir, max_papers=args.max,
+                   auto_evolve_every=args.every)
+    print(report.summary())
     return 0
 
 
@@ -247,6 +299,11 @@ def cmd_doctor(args) -> int:
     print(f"• brain: {'MOCK (offline)' if cfg.mock_mode else 'Ollama Cloud @ ' + cfg.ollama_host}")
     print(f"• models: architect={cfg.model_architect} reviewer={cfg.model_reviewer} "
           f"fast={cfg.model_fast}")
+    from .models import output_budget, spec_for
+    asp = spec_for(cfg.model_architect)
+    print(f"• limits: architect context={asp.context_window:,} "
+          f"max_output={asp.max_output:,} (per-call {output_budget(cfg, 'architect'):,}); "
+          "long artifacts generated section-wise (no truncation)")
     import os
     mcp = cfg.mcp_manifest
     has_arxiv = os.path.exists(mcp) and "arxiv-mcp-server" in open(mcp).read() if os.path.exists(mcp) else False
@@ -300,6 +357,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--max", type=int, default=10, help="papers to produce this run")
     sp.add_argument("--topics", help="comma-separated topic slugs (default: all)")
     sp.add_argument("--outdir", default="output/papers")
+    sp.add_argument("--auto-evolve-every", type=int, default=0,
+                    help="auto-evolve the doctrine every N papers from critique feedback (0=off)")
     sp.set_defaults(func=cmd_serve)
 
     sp = sub.add_parser("evolve", help="evolve the researcher doctrine (Darwin-Gödel)")
@@ -310,6 +369,22 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("topic")
     sp.add_argument("--seed", type=int, default=1337)
     sp.set_defaults(func=cmd_critique)
+
+    sp = sub.add_parser("limits", help="show model context/output budgets + long-form strategy")
+    sp.set_defaults(func=cmd_limits)
+
+    sp = sub.add_parser("artifact", help="produce a paper + emit its runnable OSS artifact bundle")
+    sp.add_argument("topic")
+    sp.add_argument("--outdir", default="output/papers")
+    sp.add_argument("--seed", type=int, default=1337)
+    sp.set_defaults(func=cmd_artifact)
+
+    sp = sub.add_parser("autoevolve", help="produce papers; recurring critique weaknesses auto-evolve doctrine")
+    sp.add_argument("--max", type=int, default=8, help="papers to produce")
+    sp.add_argument("--every", type=int, default=4, help="evolve every N papers")
+    sp.add_argument("--topics", help="comma-separated topic slugs (default: all)")
+    sp.add_argument("--outdir", default="output/papers")
+    sp.set_defaults(func=cmd_autoevolve)
 
     sp = sub.add_parser("rubric", help="print the conference reviewer rubric + rejection archetypes")
     sp.set_defaults(func=cmd_rubric)

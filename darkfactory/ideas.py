@@ -167,7 +167,7 @@ def _mine_live(topic: Topic, n: int, ctx, prior_titles: list[str], generation: i
     try:
         out = provider.chat(config.model("architect"),
                             [ChatMessage(role="user", content=prompt)],
-                            temperature=0.7, max_tokens=1200).text
+                            temperature=0.7, max_tokens=2400).text
         arr = _extract_json_array(out)
         venue = primary_venue(topic.slug).slug
         ideas: list[Idea] = []
@@ -330,7 +330,7 @@ def _extend_live(prior_title: str, topic: Topic, ctx) -> Idea | None:
     try:
         out = ctx.provider.chat(ctx.config.model("architect"),
                                 [ChatMessage(role="user", content=prompt)],
-                                temperature=0.6, max_tokens=700).text
+                                temperature=0.6, max_tokens=1200).text
         obj = _extract_json_object(out)
         if not obj:
             return None
@@ -364,7 +364,7 @@ def _revise_live(idea: Idea, reason: str, topic: Topic, ctx) -> Idea | None:
     try:
         out = ctx.provider.chat(ctx.config.model("architect"),
                                 [ChatMessage(role="user", content=prompt)],
-                                temperature=0.6, max_tokens=800).text
+                                temperature=0.6, max_tokens=1200).text
         obj = _extract_json_object(out)
         if not obj:
             return None

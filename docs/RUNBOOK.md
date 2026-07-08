@@ -83,6 +83,23 @@ redistributable. Live (`OLLAMA_API_KEY` set), the critic and judge additionally
 recall the skill packs and reason with the frontier model for sharper, venue-matched
 feedback. `skills-sync` runs automatically when the NYX capability seeds memory.
 
+### Long artifacts, OSS bundles, and auto-evolve
+
+```bash
+python -m darkfactory limits                        # model context/output budgets
+python -m darkfactory artifact prompt-injection     # paper + runnable OSS artifact bundle
+python -m darkfactory serve --max 10 --auto-evolve-every 4   # auto-evolve from critique feedback
+python -m darkfactory autoevolve --max 8 --every 4  # same, standalone
+```
+
+`limits` shows each model's context (~1M) and single-completion output ceiling.
+Long papers and code repos are generated section-by-section and continued as
+needed, so they never truncate regardless of the ceiling. Each accepted paper's
+`output/artifacts/<id>/` bundle is a standalone repo — `cd` into it and run
+`python run_benchmark.py` to reproduce the paper's numbers with zero dependencies.
+With `--auto-evolve-every N`, recurring critic weaknesses trigger a doctrine
+evolution round every N papers automatically.
+
 ### Compounding across cycles
 
 Quality compounds through the offline research ledger. Inspect it any time:

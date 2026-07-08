@@ -39,6 +39,31 @@ paper is accepted only if it clears the internal critic **and** all external jud
 Recurring weaknesses become **evolution directives**, so the researcher's doctrine
 learns to avoid them across cycles.
 
+## Built for length: model limits, long-form, and OSS artifacts
+
+The frontier cloud models read ~1M tokens but *emit* far less per call (~8-16k
+tokens). A full paper or a released code repo is longer than that, so the factory
+**never asks for a whole artifact in one completion**: `longform.py` generates
+every long artifact **section-by-section**, continuing any section that hits the
+output ceiling, so total length is unbounded and nothing truncates. `models.py`
+records each model's real context/output budget (see `darkfactory limits` and
+`doctor`) and clamps every call so it never silently over-requests.
+
+Every accepted paper also ships a **self-contained, runnable open-source artifact**
+(`artifacts.py`): the paper's real, dependency-free benchmark code, a run script, the
+released `metrics.json`, a README, requirements, and an MIT license — verified to
+**reproduce the paper's exact numbers** standalone. That is the open-source
+contribution, at length and for real.
+
+## Automatic self-improvement from feedback
+
+With `serve --auto-evolve-every N` (or the `autoevolve` command), the internal
+critic's **recurring weaknesses automatically trigger a Darwin-Gödel evolution
+round** every N papers: the accumulated critique directives are folded into the
+researcher genome's mutation pool and an improved doctrine is adopted if it scores
+higher. The feedback provider drives the factory's self-improvement on a schedule —
+no human in the loop.
+
 The critic, judge, and researcher are equipped with **in-depth SOTA skill packs**
 (`darkfactory/skills/`) — AI-security state of the art, the frontier-model lifecycle
 (Constitutional-AI critique-and-revise, RLVR's verify-or-collapse flywheel,
@@ -133,6 +158,9 @@ python -m darkfactory ledger --lineage prompt-injection   # the compounding line
 python -m darkfactory critique prompt-injection  # internal adversarial+constructive critique
 python -m darkfactory rubric                     # the reviewer rubric + rejection archetypes
 python -m darkfactory skills-sync                # load SOTA skill packs into memory
+python -m darkfactory limits                     # model context/output budgets + long-form strategy
+python -m darkfactory artifact prompt-injection  # paper + runnable OSS artifact bundle
+python -m darkfactory autoevolve --max 8 --every 4  # papers + auto-evolve from critique feedback
 python -m darkfactory evolve -g 8                # evolve the researcher doctrine
 python -m darkfactory mcp-init                   # register the arXiv MCP server
 ```
@@ -171,6 +199,10 @@ running it 24/7 and going live.
 | `critique.py` | **Internal adversarial+constructive critic** |
 | `refine.py` | **Feedback-driven critique→revise loop** (before external judge) |
 | `skills/` + `knowledge.py` | SOTA skill packs synced into NYX memory |
+| `models.py` | Latest models + **context/output budgets** (no truncation) |
+| `longform.py` | **Section-wise long-form generation** for papers/code |
+| `artifacts.py` | **Runnable OSS artifact bundles** that reproduce the paper |
+| `autoevolve.py` | **Auto-evolve** from recurring critique weaknesses |
 | `memory.py` | **Compounding ledger**: contributions, lineage, ratcheting bar |
 | `review.py` | Conference-bar thoroughness reviewer |
 | `experiments.py` | Self-contained real benchmarks (3 families, pure Python) |

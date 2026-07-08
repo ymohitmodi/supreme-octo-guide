@@ -97,6 +97,41 @@ written to memory, so the doctrine improves across cycles — feedback-driven
 evolution. Acceptance gates on the internal critic first, so the internal verdict
 predicts and precedes the external one.
 
+## Long artifacts without truncation (`models.py`, `longform.py`)
+
+Frontier cloud models take ~1M-token context but emit only ~8-16k tokens per
+completion. `models.py` records each model's `ModelSpec` (context window +
+`max_output`) and `output_budget(cfg, role, want)` clamps every request to the
+host ceiling, so a call never silently over-asks and truncates. `longform.py`
+generates any long artifact **section by section** — each section its own budgeted
+completion — and *continues* a section that hits the ceiling (detected via
+`completion_tokens` near the cap or a mid-sentence cutoff), so total length is
+unbounded. Offline it renders each section's deterministic draft, so the machine
+is testable without a brain. Structured JSON calls (idea mining, critique) request
+generous-but-bounded budgets to avoid mid-object truncation, with the offline
+fallback as a safety net.
+
+## Reproducible OSS artifacts (`artifacts.py`)
+
+Every accepted paper ships a self-contained artifact repo that regenerates its
+numbers: the paper's real benchmark vendored verbatim as `experiment_kit.py`
+(pure stdlib — zero dependencies), a `run_benchmark.py` that prints the table and
+asserts determinism, the released `metrics.json`, a long-form README (built with
+`longform`), `requirements.txt`, and an MIT `LICENSE`. `emit_artifact` verifies the
+emitted kit reproduces the paper's `table_rows` before returning, so a released
+bundle is provably reproducible.
+
+## Auto-evolve from feedback (`autoevolve.py`)
+
+`AutoEvolver` watches paper results, accumulates the internal critic's constructive
+directives, and tracks which weakness archetypes *recur*. On a schedule (`serve
+--auto-evolve-every N`) it runs a Darwin-Gödel round with the base + critique-derived
+directive pool and adopts the improved `researcher` genome if it scores higher —
+closing the loop from "the critic found a recurring gap" to "the doctrine changed
+so it stops happening," with no human in the loop. The NYX CapabilityRunner path
+gets the same behavior for free: the capability folds critique directives into
+`directives()`, which the engine mutates against every evolution round.
+
 ## SOTA skill packs (`skills/`, `knowledge.py`)
 
 Five in-depth markdown packs encode the state of the art: AI-security SOTA (threat

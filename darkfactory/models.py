@@ -14,6 +14,7 @@ NYX's own placeholder defaults).
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 
 # Role -> latest recommended Ollama Cloud model tag (highest accuracy first).
 LATEST_OLLAMA_CLOUD = {
@@ -23,6 +24,72 @@ LATEST_OLLAMA_CLOUD = {
     "fast": "qwen3.5:cloud",               # routing, scoring, short judgments
     "embed": "nomic-embed-text",           # semantic memory embeddings
 }
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    """Capacity of a model: how much it can read (context) and write (output).
+
+    ``context_window`` is total tokens in ⇄ out; ``max_output`` is the largest
+    single completion. These frontier cloud models take ~1M-token context, but the
+    single-completion output is far smaller — which is exactly why long artifacts
+    (papers, code repos) must be generated section-by-section (see longform.py) and
+    never in one shot. Values are conservative, honest defaults for what a single
+    Ollama-Cloud completion reliably returns; override via env if your host differs.
+    """
+    context_window: int
+    max_output: int
+
+
+# Studied capacities (mid-2026). Context windows are ~1M for the frontier models;
+# we cap the *working* context we actually fill (well under the max) and the
+# single-completion output to values the serving layer reliably returns.
+MODEL_SPECS: dict[str, ModelSpec] = {
+    "glm-5.2:cloud": ModelSpec(context_window=1_000_000, max_output=16_384),
+    "deepseek-v4-pro:cloud": ModelSpec(context_window=1_000_000, max_output=16_384),
+    "deepseek-v4-flash:cloud": ModelSpec(context_window=1_000_000, max_output=16_384),
+    "qwen3.5:cloud": ModelSpec(context_window=262_144, max_output=8_192),
+    "kimi-k2.6:cloud": ModelSpec(context_window=262_144, max_output=16_384),
+}
+# Safe fallback for any unlisted model: assume a modest window + output so we
+# chunk conservatively rather than truncate.
+DEFAULT_SPEC = ModelSpec(context_window=32_768, max_output=4_096)
+
+# The working context we are willing to fill for a prompt (leaves headroom for the
+# model's own reasoning + output within the real window). Bounded so we never rely
+# on the full million tokens, which degrades quality and latency.
+WORKING_CONTEXT_TOKENS = 96_000
+
+
+def spec_for(model: str) -> ModelSpec:
+    key = model.strip()
+    if key in MODEL_SPECS:
+        return MODEL_SPECS[key]
+    # Match by family prefix (e.g. "glm-5.2:cloud-preview").
+    for name, spec in MODEL_SPECS.items():
+        if key.startswith(name.split(":")[0]):
+            return spec
+    return DEFAULT_SPEC
+
+
+def output_budget(cfg, role: str, want: int | None = None) -> int:
+    """Max tokens to request for one completion of ``role`` — bounded by the model.
+
+    ``want`` is the desired length; the result is clamped to the model's single-
+    completion ceiling so a call never asks for more than the host will return
+    (which would silently truncate). Long artifacts loop over sections instead.
+    """
+    spec = spec_for(cfg.model(role) if hasattr(cfg, "model") else role)
+    ceiling = spec.max_output
+    return max(256, min(want or ceiling, ceiling))
+
+
+def context_budget_chars(cfg, role: str) -> int:
+    """Approximate char budget for a prompt to ``role`` (~4 chars/token)."""
+    spec = spec_for(cfg.model(role) if hasattr(cfg, "model") else role)
+    tokens = min(spec.context_window, WORKING_CONTEXT_TOKENS)
+    # Reserve ~1/3 of the working window for the model's output/reasoning.
+    return int(tokens * 4 * 0.66)
 
 # NYX's own placeholder defaults — safe to overwrite (they are not user intent).
 _NYX_PLACEHOLDERS = {

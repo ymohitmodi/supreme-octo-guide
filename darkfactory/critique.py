@@ -153,7 +153,7 @@ def critique_live(idea: Idea, exp: ExperimentResult, tex: str, ctx) -> CritiqueR
     try:
         out = ctx.provider.chat(ctx.config.model("reviewer"),
                                 [ChatMessage(role="user", content=prompt)],
-                                temperature=0.2, max_tokens=700).text
+                                temperature=0.2, max_tokens=1600).text
         from .ideas import _extract_json_object
         obj = _extract_json_object(out)
         if obj and isinstance(obj.get("dimension_scores"), dict):
