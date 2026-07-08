@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "darkfactory-aisec"
+version = "0.1.0"
+description = "Dark Factory — an autonomous, self-evolving AI-security research team that mines, validates, and writes conference-grade papers on NYX + Ollama Cloud."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "AI Security Research Team" }]
+keywords = [
+    "ai-security", "research-agent", "autonomous", "dark-factory", "nyx",
+    "adversarial-ml", "prompt-injection", "red-teaming", "ollama", "latex",
+]
+
+# The dark factory is a *capability* that plugs into NYX. Core stays
+# dependency-light so it runs on a Windows 11 mini-PC and offline in mock mode.
+dependencies = [
+    "nyx-dark-factory @ git+https://github.com/ymohitmodi/upgraded-palm-tree",
+]
+
+[project.optional-dependencies]
+http = ["requests>=2.31"]
+# Live model + web + embeddings come from NYX's own extras; nothing else is
+# strictly required — experiments and paper generation are pure-Python.
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+darkfactory = "darkfactory.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["darkfactory*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Match NYX's relaxed-but-clean posture.
+ignore = ["E402", "E741"]
