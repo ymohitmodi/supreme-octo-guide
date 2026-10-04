@@ -4,9 +4,11 @@ An evolving, 24/7 **AI-security research dark factory** built on
 [NYX](https://github.com/ymohitmodi/upgraded-palm-tree). It researches AI
 security around the clock, **mines** candidate research ideas, **validates** them
 against the public prior art of top venues, **iterates** until an idea clears a
-strict novelty bar, **runs its own benchmarks**, and **writes conference-grade
-LaTeX/PDF papers** — every publication gated by a bar-raiser and a
-research-integrity constitution.
+strict novelty bar, **runs its own benchmarks**, and **drafts conference-style
+LaTeX/PDF papers** — every draft gated by a bar-raiser and a
+research-integrity constitution. The bundled experiments are small synthetic
+studies: the output is a disciplined, reproducible *first draft* for a human
+researcher to extend, not a finished publication.
 
 It plugs into NYX as a *capability*, so it inherits NYX's continual learning,
 Darwin-Gödel evolution, least-privilege tools, and tamper-evident audit ledger.
@@ -22,6 +24,17 @@ ingest SOTA (arXiv MCP) → build on prior contributions → mine foundational i
     → integrity gate → conference-bar review (calibrated to real rubrics)
     → accept → record contribution → feed weaknesses back into evolution
 ```
+
+## At a glance
+
+| | |
+|---|---|
+| **Purpose** | Study how far a *governed* agent pipeline can go on open-ended research: mining ideas, checking them against prior art, running real (small) experiments, and drafting papers behind integrity gates. |
+| **Prerequisites** | Python 3.10+, `git` (the NYX dependency installs from GitHub). **No API key needed** — without `OLLAMA_API_KEY` everything runs offline in deterministic mock mode. Optional: a TeX toolchain (MiKTeX / TeX Live / MacTeX) to compile PDFs. |
+| **Install** | `pip install -e ".[dev]"` on **Windows 11, macOS or Linux** (Windows mini-PC helper: `scripts/setup-windows11.ps1`). |
+| **Run** | `python -m darkfactory doctor` → `python -m darkfactory paper prompt-injection` · tests: `pytest` · lint: `ruff check darkfactory tests` |
+| **Benefits** | Free/open-source stack · fully reproducible offline · every claim in a draft traces to a real experiment output (no placeholder numbers). |
+| **Status** | Research prototype (v0.1). It does not guarantee acceptance anywhere; offline novelty scoring is a deterministic proxy. See *What it actually does (and what it doesn't)*. |
 
 ## Internal critic before the external judge
 
@@ -216,4 +229,4 @@ running it 24/7 and going live.
 
 ## License
 
-MIT.
+MIT — see [`LICENSE`](LICENSE).

@@ -9,7 +9,7 @@ description = "Dark Factory — an autonomous, self-evolving AI-security researc
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "AI Security Research Team" }]
+authors = [{ name = "Mohit Modi" }]
 keywords = [
     "ai-security", "research-agent", "autonomous", "dark-factory", "nyx",
     "adversarial-ml", "prompt-injection", "red-teaming", "ollama", "latex",
@@ -46,5 +46,8 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-# Match NYX's relaxed-but-clean posture.
+# Match NYX's relaxed-but-clean posture. The ruleset is pinned explicitly (pycodestyle
+# E4/E7/E9 + pyflakes F) because CI installs a floating ruff, whose default rule set
+# grows with each release; without `select`, lint results drift with every upgrade.
+select = ["E4", "E7", "E9", "F"]
 ignore = ["E402", "E741"]
