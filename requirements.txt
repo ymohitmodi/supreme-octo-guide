@@ -1,0 +1,14 @@
+# Dark Factory (AI-security research team) — runtime.
+#
+# The core is intentionally DEPENDENCY-LIGHT: with no OLLAMA_API_KEY the whole
+# pipeline runs in deterministic MOCK mode (idea mining, novelty bar-raiser,
+# real offline experiments, LaTeX generation) with nothing below except NYX.
+#
+#   nyx-dark-factory  -> the agentic OS this capability plugs into
+#   requests          -> live Ollama Cloud + web ingestion (stdlib fallback exists)
+#
+# For live paper compilation to PDF, install a TeX toolchain separately
+# (e.g. MiKTeX on Windows, or `tlmgr install` on Linux); otherwise the factory
+# emits publication-ready .tex + a Markdown fallback.
+nyx-dark-factory @ git+https://github.com/ymohitmodi/upgraded-palm-tree
+requests>=2.31

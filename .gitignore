@@ -1,0 +1,29 @@
+# Dark Factory runtime state (audit ledger, memory, evolution archive, caches)
+.nyx/
+.darkfactory/
+
+# Generated research output (papers, benchmarks, figures)
+output/
+papers/
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Env / secrets
+.env
